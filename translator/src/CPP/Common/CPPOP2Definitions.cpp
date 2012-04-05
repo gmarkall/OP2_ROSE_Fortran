@@ -29,8 +29,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-
+#include <OP2.h>
 #include <CPPOP2Definitions.h>
+#include <CPPProgramDeclarationsAndDefinitions.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <Debug.h>
@@ -322,4 +323,293 @@ CPPOxfordOpConstDefinition::CPPOxfordOpConstDefinition (
       + variableName + "' Its dimension is "
       + lexical_cast <string> (dimension), Debug::FUNCTION_LEVEL, __FILE__,
       __LINE__);
+}
+
+CPPImperialOpSparsityDefinition::CPPImperialOpSparsityDefinition (
+    SgExprListExp * parameters, std::string const & variableName)
+{
+  using std::string;
+  this->variableName = variableName;
+
+  map1Name = isSgVarRefExp (
+      parameters->get_expressions ()[indexOpMap1])->get_symbol ()->
+      get_name ().getString ();
+
+  map2Name = isSgVarRefExp (
+      parameters->get_expressions ()[indexOpMap2])->get_symbol ()->
+      get_name ().getString ();
+
+  ROSE_ASSERT (variableName.empty () == false);
+  ROSE_ASSERT (map1Name.empty () == false);
+  ROSE_ASSERT (map2Name.empty () == false);
+
+  Debug::getInstance ()->debugMessage ("Found an OP_SPARSITY declaration: '"
+      + variableName + "' using maps " + map1Name + " and " + map2Name,
+      Debug::FUNCTION_LEVEL, __FILE__, __LINE__);
+}
+
+CPPImperialOpMatDefinition::CPPImperialOpMatDefinition (
+    SgExprListExp * parameters, std::string const & variableName)
+{
+  using std::string;
+  using boost::iequals;
+  using boost::lexical_cast;
+
+  this->variableName = variableName;
+
+  sparsityName = isSgVarRefExp (
+      parameters->get_expressions ()[indexOpSparsity])->get_symbol ()->
+      get_name ().getString ();
+
+  dimension = isSgIntVal (
+      parameters->get_expressions ()[indexDimension])->get_value ();
+
+  string type = isSgStringVal (
+      isSgCastExp (
+          parameters->get_expressions ()[indexTypeName])->get_operand ())->get_value ();
+
+  /*
+   * FIXME: is there a better way to derive the base type?
+   */
+  if (iequals (type, "float"))
+  {
+    baseType = new SgTypeFloat ();
+  }
+  else if (iequals(type, "double"))
+  {
+    baseType = new SgTypeDouble ();
+  }
+  else
+  {
+    Debug::getInstance ()->debugMessage (
+        "Unknown OP_MAT entry type '" + type + "', aborting",
+        Debug::HIGHEST_DEBUG_LEVEL, __FILE__, __LINE__);
+    ROSE_ASSERT (false);
+  }
+
+  Debug::getInstance ()->debugMessage (
+      "Found an OP_MAT declaration: it has a sparsity pattern given by '" +
+      sparsityName + "', dimension " + lexical_cast <string> (dimension) +
+      " and stores entries of type " + baseType->class_name (),
+      Debug::FUNCTION_LEVEL, __FILE__, __LINE__);
+}
+
+static void getArgMatExtent (SgExpression * idx,
+    OpIterationSpaceDefinition * itspace,
+    int mapDim,
+    int extent[2])
+{
+  SgFunctionCallExp * f = isSgFunctionCallExp (idx);
+  /* Reference to op_iteration_space argument */
+  if (f != NULL)
+  {
+    int which = isSgIntVal(f->get_args ()->get_expressions ()[0])->
+        get_value ();
+
+    /*
+     * First argument to op_iteration_space is the set, which we don't
+     * want, so shift user values by one.
+     */
+    which--;
+    extent[0] = 0;
+    extent[1] = itspace->getIterationDimensions ()[which];
+  }
+  else if (isSgIntVal (idx))
+  {
+    int val = isSgIntVal (idx)->get_value ();
+    if (val < 0)
+    {
+      /* Negative, OP_ALL */
+      extent[0] = 0;
+      extent[1] = mapDim;
+    }
+    else
+    {
+      extent[0] = val;
+      extent[1] = val + 1;
+    }
+  }
+  else
+  {
+    Debug::getInstance ()->debugMessage (
+        "Unable to parse index in OP_ARG_MAT (not a positive integer, OP_ALL or op_i)",
+        Debug::HIGHEST_DEBUG_LEVEL, __FILE__, __LINE__);
+    ROSE_ASSERT (false);
+  }
+}
+
+CPPImperialOpArgMatDefinition::CPPImperialOpArgMatDefinition (
+    SgExprListExp * parameters, CPPProgramDeclarationsAndDefinitions * declarations,
+    OpIterationSpaceDefinition * itspace)
+{
+  using boost::iequals;
+  using boost::lexical_cast;
+  using std::string;
+
+  SgExpressionPtrList exprs = parameters->get_expressions ();
+  SgExpression * tmp;
+
+  tmp = exprs[indexOpMat];
+  matName = isSgVarRefExp(tmp)->get_symbol ()->get_name ().getString ();
+
+  tmp = exprs[indexOpMap1];
+
+  map1Name = isSgVarRefExp(tmp)->get_symbol ()->get_name ().getString ();
+
+  tmp = exprs[indexOpIndex1];
+
+  getArgMatExtent (tmp, itspace,
+      declarations->getOpMapDefinition (map1Name)->getDimension (),
+      map1extent);
+
+  tmp = exprs[indexOpMap2];
+
+  map2Name = isSgVarRefExp(tmp)->get_symbol ()->get_name ().getString ();
+
+  tmp = exprs[indexOpIndex2];
+
+  getArgMatExtent (tmp, itspace,
+      declarations->getOpMapDefinition (map2Name)->getDimension (),
+      map2extent);
+
+  dimension = declarations->getOpMatDefinition (matName)->getDimension ();
+
+  tmp = exprs[indexAccessDescriptor];
+
+  if (isSgEnumVal (tmp))
+  {
+    ROSE_ASSERT (iequals (isSgEnumVal (tmp)->get_name ().getString (),
+                          OP2::OP_INC));
+  }
+
+  Debug::getInstance ()->debugMessage (
+      "Found OP_ARG_MAT: accessing '" + matName + "' through extents ("
+      + lexical_cast <string> (map1extent) + ", " + lexical_cast <string> (map2extent)
+      + ") of maps (" + map1Name + ", " + map2Name + ") with dimension "
+      + lexical_cast <string> (dimension),
+      Debug::FUNCTION_LEVEL, __FILE__, __LINE__);
+}
+
+CPPOxfordOpSparsityDefinition::CPPOxfordOpSparsityDefinition (
+    SgExprListExp * parameters, std::string const & variableName)
+{
+  using std::string;
+  this->variableName = variableName;
+
+  map1Name = isSgVarRefExp (
+      parameters->get_expressions ()[indexOpMap1])->get_symbol ()->
+      get_name ().getString ();
+
+  map2Name = isSgVarRefExp (
+      parameters->get_expressions ()[indexOpMap2])->get_symbol ()->
+      get_name ().getString ();
+
+  ROSE_ASSERT (variableName.empty () == false);
+  ROSE_ASSERT (map1Name.empty () == false);
+  ROSE_ASSERT (map2Name.empty () == false);
+
+  Debug::getInstance ()->debugMessage ("Found an OP_SPARSITY declaration: '"
+      + variableName + "' using maps " + map1Name + " and " + map2Name,
+      Debug::FUNCTION_LEVEL, __FILE__, __LINE__);
+}
+
+CPPOxfordOpMatDefinition::CPPOxfordOpMatDefinition (
+    SgExprListExp * parameters, std::string const & variableName)
+{
+  using std::string;
+  using boost::iequals;
+  using boost::lexical_cast;
+
+  this->variableName = variableName;
+
+  sparsityName = isSgVarRefExp (
+      parameters->get_expressions ()[indexOpSparsity])->get_symbol ()->
+      get_name ().getString ();
+
+  dimension = isSgIntVal (
+      parameters->get_expressions ()[indexDimension])->get_value ();
+
+  string type = isSgStringVal (
+      isSgCastExp (
+          parameters->get_expressions ()[indexTypeName])->get_operand ())->get_value ();
+
+  /*
+   * FIXME: is there a better way to derive the base type?
+   */
+  if (iequals (type, "float"))
+  {
+    baseType = new SgTypeFloat ();
+  }
+  else if (iequals(type, "double"))
+  {
+    baseType = new SgTypeDouble ();
+  }
+  else
+  {
+    Debug::getInstance ()->debugMessage (
+        "Unknown OP_MAT entry type '" + type + "', aborting",
+        Debug::HIGHEST_DEBUG_LEVEL, __FILE__, __LINE__);
+    ROSE_ASSERT (false);
+  }
+
+  Debug::getInstance ()->debugMessage (
+      "Found an OP_MAT declaration: it has a sparsity pattern given by '" +
+      sparsityName + "', dimension " + lexical_cast <string> (dimension) +
+      " and stores entries of type " + baseType->class_name (),
+      Debug::FUNCTION_LEVEL, __FILE__, __LINE__);
+}
+
+CPPOxfordOpArgMatDefinition::CPPOxfordOpArgMatDefinition (
+    SgExprListExp * parameters, CPPProgramDeclarationsAndDefinitions * declarations,
+    OpIterationSpaceDefinition * itspace)
+{
+  using boost::iequals;
+  using boost::lexical_cast;
+  using std::string;
+
+  SgExpressionPtrList exprs = parameters->get_expressions ();
+  SgExpression * tmp;
+
+  tmp = exprs[indexOpMat];
+  matName = isSgVarRefExp(tmp)->get_symbol ()->get_name ().getString ();
+
+
+  tmp = exprs[indexOpMap1];
+
+  map1Name = isSgVarRefExp(tmp)->get_symbol ()->get_name ().getString ();
+
+  tmp = exprs[indexOpIndex1];
+
+  getArgMatExtent (tmp, itspace,
+      declarations->getOpMapDefinition (map1Name)->getDimension (),
+      map1extent);
+
+  tmp = exprs[indexOpMap2];
+
+  map2Name = isSgVarRefExp(tmp)->get_symbol ()->get_name ().getString ();
+
+  tmp = exprs[indexOpIndex2];
+
+  getArgMatExtent (tmp, itspace,
+      declarations->getOpMapDefinition (map2Name)->getDimension (),
+      map2extent);
+
+  tmp = exprs[indexDimension];
+
+  dimension = isSgIntVal (tmp)->get_value ();
+
+  tmp = exprs[indexAccessDescriptor];
+
+  if (isSgEnumVal (tmp))
+  {
+    ROSE_ASSERT (iequals (isSgEnumVal (tmp)->get_name ().getString (),
+                          OP2::OP_INC));
+  }
+
+  Debug::getInstance ()->debugMessage (
+      "Found OP_ARG_MAT: accessing '" + matName + "' through extents ("
+      + lexical_cast <string> (map1extent) + ", " + lexical_cast <string> (map2extent)
+      + ") of maps (" + map1Name + ", " + map2Name + ") with dimension "
+      + lexical_cast <string> (dimension),
+      Debug::FUNCTION_LEVEL, __FILE__, __LINE__);
 }

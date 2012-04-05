@@ -54,14 +54,24 @@ CPPHostSubroutine::createInitialisePlanFunctionArrayStatements ()
 
   SgBasicBlock * block = buildBasicBlock ();
 
-  for (unsigned int i = 1; i <= parallelLoop->getNumberOfOpDatArgumentGroups (); ++i)
+  for (unsigned int i = 1; i <= parallelLoop->getNumberOfArgumentGroups (); ++i)
   {
+    SgVarRefExp * var;
+    if (parallelLoop->isOpMatArg (i))
+    {
+      unsigned int mat_num = parallelLoop->getOpMatArgNum (i);
+      var = variableDeclarations->getReference (getOpMatName (mat_num));
+    }
+    else
+    {
+      unsigned int dat_num = parallelLoop->getOpDatArgNum (i);
+      var = variableDeclarations->getReference (getOpDatName (dat_num));
+    }
     SgPntrArrRefExp * arrayIndexExpression = buildPntrArrRefExp (
         variableDeclarations->getReference (opDatArray), buildIntVal (i - 1));
 
     SgExprStatement * assignmentStatement = buildAssignStatement (
-        arrayIndexExpression, variableDeclarations->getReference (getOpDatName (
-            i)));
+      arrayIndexExpression, var);
 
     appendStatement (assignmentStatement, block);
   }
@@ -69,40 +79,49 @@ CPPHostSubroutine::createInitialisePlanFunctionArrayStatements ()
   map <string, unsigned int> indirectOpDatsToIndirection;
   unsigned int indirection = 0;
 
-  for (unsigned int i = 1; i <= parallelLoop->getNumberOfOpDatArgumentGroups (); ++i)
+  for (unsigned int i = 1; i <= parallelLoop->getNumberOfArgumentGroups (); ++i)
   {
     SgPntrArrRefExp * arrayIndexExpression = buildPntrArrRefExp (
-        variableDeclarations->getReference (indirectionDescriptorArray),
-        buildIntVal (i - 1));
+      variableDeclarations->getReference (indirectionDescriptorArray),
+      buildIntVal (i - 1));
 
     SgExprStatement * assignmentStatement;
 
-    if (parallelLoop->isIndirect (i))
+    if (parallelLoop->isOpMatArg (i))
     {
-      if (parallelLoop->isDuplicateOpDat (i) == false)
+      assignmentStatement = buildAssignStatement (arrayIndexExpression,
+                                                  buildIntVal (indirection));
+      indirection++;
+    }
+    else
+    {
+      unsigned int dat_num = parallelLoop->getOpDatArgNum (i);
+      if (parallelLoop->isIndirect (i))
       {
-        assignmentStatement = buildAssignStatement (arrayIndexExpression,
-            buildIntVal (indirection));
+        if (parallelLoop->isDuplicateOpDat (i) == false)
+        {
+          assignmentStatement = buildAssignStatement (arrayIndexExpression,
+                                                      buildIntVal (indirection));
 
-        indirectOpDatsToIndirection[parallelLoop->getOpDatVariableName (i)]
+          indirectOpDatsToIndirection[parallelLoop->getOpDatVariableName (dat_num)]
             = indirection;
 
-        indirection++;
+          indirection++;
+        }
+        else
+        {
+          assignmentStatement = buildAssignStatement (arrayIndexExpression,
+                                                      buildIntVal (
+                                                        indirectOpDatsToIndirection[parallelLoop->getOpDatVariableName (dat_num)]));
+        }
       }
       else
       {
         assignmentStatement = buildAssignStatement (arrayIndexExpression,
-            buildIntVal (
-                indirectOpDatsToIndirection[parallelLoop->getOpDatVariableName (
-                    i)]));
+                                                    buildIntVal (-1));
       }
-    }
-    else
-    {
-      assignmentStatement = buildAssignStatement (arrayIndexExpression,
-          buildIntVal (-1));
-    }
 
+    }
     appendStatement (assignmentStatement, block);
   }
 
@@ -157,14 +176,22 @@ CPPHostSubroutine::createFormalParameterDeclarations ()
    * ======================================================
    */
 
-  for (unsigned int i = 1; i <= parallelLoop->getNumberOfOpDatArgumentGroups (); ++i)
+  for (unsigned int i = 1; i <= parallelLoop->getNumberOfArgumentGroups (); ++i)
   {
-    string const & opDatvariableName = getOpDatName (i);
+    string variableName;
+    if (parallelLoop->isOpMatArg (i))
+    {
+      variableName = getOpMatName (parallelLoop->getOpMatArgNum (i));
+    }
+    else
+    {
+      variableName = getOpDatName (parallelLoop->getOpDatArgNum (i));
+    }
 
     variableDeclarations->add (
-        opDatvariableName,
+        variableName,
         RoseStatementsAndExpressionsBuilder::appendVariableDeclarationAsFormalParameter (
-            opDatvariableName, buildOpaqueType (OP2::OP_ARG, subroutineScope),
+            variableName, buildOpaqueType (OP2::OP_ARG, subroutineScope),
             subroutineScope, formalParameters));
   }
 }

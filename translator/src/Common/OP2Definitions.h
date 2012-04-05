@@ -35,8 +35,10 @@
 #define OP2_DEFINITIONS_H
 
 #include <string>
+#include <vector>
 
 class SgType;
+class SgExprListExp;
 
 class OP2Definition
 {
@@ -138,6 +140,29 @@ class OpSubSetDefinition: public OpSetDefinition
     getNbFilterArg ();
 };
 
+class OpSparsityDefinition: public OP2Definition
+{
+    /*
+     * ======================================================
+     * Models an OP_SPARSITY variable definition
+     * ======================================================
+     */
+
+  protected:
+
+    std::string map1Name;
+
+    std::string map2Name;
+
+  public:
+
+    std::string const &
+    getMap1Name () const;
+
+    std::string const &
+    getMap2Name () const;
+};
+
 class OpMapDefinition: public OP2Definition
 {
     /*
@@ -169,6 +194,34 @@ class OpMapDefinition: public OP2Definition
 
     std::string const &
     getMappingName () const;
+};
+
+class OpMatDefinition: public OP2Definition
+{
+    /*
+     * ======================================================
+     * Models an OP_MAT variable definition
+     * ======================================================
+     */
+
+  protected:
+
+    std::string sparsityName;
+
+    unsigned int dimension;
+
+    SgType * baseType;
+
+  public:
+
+    std::string const &
+    getSparsityName () const;
+
+    unsigned int
+    getDimension () const;
+
+    SgType *
+    getBaseType ();
 };
 
 class OpGblDefinition: public OP2Definition
@@ -212,6 +265,62 @@ class OpConstDefinition: public OP2Definition
 
     SgType *
     getType ();
+
+    unsigned int
+    getDimension () const;
+};
+
+class OpIterationSpaceDefinition
+{
+  protected:
+
+    std::string setName;
+
+    std::vector<int> iterationDimensions;
+
+  public:
+
+    std::string const &
+    getSetName () const;
+
+    std::vector<int>
+    getIterationDimensions () const;
+
+    OpIterationSpaceDefinition (SgExprListExp * args);
+};
+
+class OpArgMatDefinition
+{
+  protected:
+
+    std::string matName;
+
+    int map1extent[2];
+
+    std::string map1Name;
+
+    int map2extent[2];
+
+    std::string map2Name;
+
+    unsigned int dimension;
+
+  public:
+
+    std::string const &
+    getMatName () const;
+
+    const int *
+    getMap1Extent () const;
+
+    std::string const &
+    getMap1Name () const;
+
+    const int *
+    getMap2Extent () const;
+
+    std::string const &
+    getMap2Name () const;
 
     unsigned int
     getDimension () const;

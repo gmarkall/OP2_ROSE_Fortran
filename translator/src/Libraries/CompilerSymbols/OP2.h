@@ -53,6 +53,7 @@ namespace OP2
   std::string const OP_ARG_DAT = "op_arg_dat";
   std::string const OP_ARG_DAT_GENERIC = "op_arg_dat_generic";
   std::string const OP_ARG_GBL = "op_arg_gbl";
+  std::string const OP_ARG_MAT = "op_arg_mat";
   std::string const OP_DAT = "op_dat";
   std::string const OP_DAT_CORE = "op_dat_core";
   std::string const OP_DAT_GBL = "op_dat_gbl";
@@ -60,13 +61,17 @@ namespace OP2
   std::string const OP_DECL_DAT = "op_decl_dat";
   std::string const OP_DECL_GBL = "op_decl_gbl";
   std::string const OP_DECL_MAP = "op_decl_map";
-  std::string const OP_DECL_SET = "op_decl_set";\
+  std::string const OP_DECL_MAT = "op_decl_mat";
+  std::string const OP_DECL_SET = "op_decl_set";
   std::string const OP_DECL_SUBSET = "op_decl_subset";
+  std::string const OP_DECL_SPARSITY = "op_decl_sparsity";
   std::string const OP_GBL = "op_gbl";
   std::string const OP_ID = "op_id";
+  std::string const OP_ITERATION_SPACE = "op_iteration_space";
   std::string const OP_INC = "op_inc";
   std::string const OP_MAP = "op_map";
   std::string const OP_MAP_CORE = "op_map_core";
+  std::string const OP_MAT = "op_mat";
   std::string const OP_MAX = "op_max";
   std::string const OP_MIN = "op_min";
   std::string const OP_PAR_LOOP = "op_par_loop";
@@ -76,6 +81,7 @@ namespace OP2
   std::string const OP_RW = "op_rw";
   std::string const OP_SET = "op_set";
   std::string const OP_SET_CORE = "op_set_core";
+  std::string const OP_SPARSITY = "op_sparsity";
   std::string const OP_WRITE = "op_write";
   
   namespace RunTimeVariableNames
@@ -90,6 +96,9 @@ namespace OP2
     std::string const dat_d = "dat_d";
     std::string const data = "data";
     std::string const data_d = "data_d";
+    std::string const colptr_d = "colptr_d";
+    std::string const rowptr_d = "rowptr_d";
+    std::string const nrow = "nrow";
     std::string const dim = "dim";
     std::string const index = "index";
     std::string const set = "set";

@@ -335,6 +335,10 @@ CPPProgramDeclarationsAndDefinitions::analyseParallelLoopArguments (
 
   unsigned int OP_DAT_ArgumentGroup = 1;
 
+  unsigned int OP_MAT_ArgumentGroup = 1;
+
+  unsigned int ArgumentGroup = 1;
+  OpIterationSpaceDefinition * itspace = NULL;
   for (unsigned int argument = 0; argument
       < actualArguments->get_expressions ().size (); ++argument)
   {
@@ -352,43 +356,74 @@ CPPProgramDeclarationsAndDefinitions::analyseParallelLoopArguments (
     {
       SgExprListExp * opDatActualArguments = opDatCall->get_args ();
 
-      if (iequals (
-          opDatCall->getAssociatedFunctionSymbol ()->get_name ().getString (),
-          OP2::OP_ARG_DAT))
+      string name = opDatCall->getAssociatedFunctionSymbol ()->get_name ().getString ();
+
+      if (iequals(name, OP2::OP_ITERATION_SPACE))
+      {
+        itspace = new OpIterationSpaceDefinition (opDatActualArguments);
+        /* rewrite set argument, the magic happens in the generated
+         * device code */
+        actualArguments->get_expressions ()[argument] = opDatActualArguments->get_expressions ()[0];
+        continue;
+      }
+      parallelLoop->setIsOpMatArg (ArgumentGroup, false);
+      if (iequals (name, OP2::OP_ARG_DAT))
       {
         if (opDatActualArguments->get_expressions ().size ()
             == CPPImperialOpArgDatCall::getNumberOfExpectedArguments ())
         {
           handleImperialOpDatArgument (parallelLoop, opDatActualArguments,
-              OP_DAT_ArgumentGroup);
+              ArgumentGroup);
         }
         else
         {
           handleOxfordOpDatArgument (parallelLoop, opDatActualArguments,
-              OP_DAT_ArgumentGroup);
+              ArgumentGroup);
         }
+        parallelLoop->setOpDatArgNum (ArgumentGroup, OP_DAT_ArgumentGroup);
+        OP_DAT_ArgumentGroup++;
+      }
+      else if (iequals (name, OP2::OP_ARG_MAT))
+      {
+        parallelLoop->setIsOpMatArg (ArgumentGroup, true);
+        parallelLoop->setOpMatArgNum (ArgumentGroup, OP_MAT_ArgumentGroup);
+        if (opDatActualArguments->get_expressions ().size ()
+            == CPPImperialOpArgMatDefinition::getNumberOfExpectedArguments ())
+        {
+          parallelLoop->setOpMatArg (OP_MAT_ArgumentGroup,
+              new CPPImperialOpArgMatDefinition (opDatActualArguments, this, itspace));
+        }
+        else
+        {
+          parallelLoop->setOpMatArg (OP_MAT_ArgumentGroup,
+              new CPPOxfordOpArgMatDefinition (opDatActualArguments, this, itspace));
+        }
+        OP_MAT_ArgumentGroup++;
       }
       else
       {
-        parallelLoop->setOpMapValue (OP_DAT_ArgumentGroup, GLOBAL);
+        parallelLoop->setOpMapValue (ArgumentGroup, GLOBAL);
+        parallelLoop->setOpDatArgNum (ArgumentGroup, OP_DAT_ArgumentGroup);
 
         if (opDatActualArguments->get_expressions ().size ()
             == CPPImperialOpArgGblCall::getNumberOfExpectedArguments ())
         {
           handleImperialOpGblArgument (parallelLoop, opDatActualArguments,
-              OP_DAT_ArgumentGroup);
+              ArgumentGroup);
         }
         else
         {
           handleOxfordOpGblArgument (parallelLoop, opDatActualArguments,
-              OP_DAT_ArgumentGroup);
+              ArgumentGroup);
         }
+        OP_DAT_ArgumentGroup++;
       }
 
-      OP_DAT_ArgumentGroup++;
+      ArgumentGroup++;
     }
   }
 
+  parallelLoop->setNumberOfOpMatArgumentGroups (OP_MAT_ArgumentGroup - 1);
   parallelLoop->setNumberOfOpDatArgumentGroups (OP_DAT_ArgumentGroup - 1);
 }
 
@@ -464,7 +499,7 @@ CPPProgramDeclarationsAndDefinitions::detectAndHandleOP2Definition (
     OpMapDefinition * opMapDeclaration;
 
     if (functionCallExpression->get_args ()->get_expressions ().size ()
-        == CPPImperialOpSetDefinition::getNumberOfExpectedArguments ())
+        == CPPImperialOpMapDefinition::getNumberOfExpectedArguments ())
     {
       opMapDeclaration = new CPPImperialOpMapDefinition (
           functionCallExpression->get_args (), variableName);
@@ -513,6 +548,74 @@ CPPProgramDeclarationsAndDefinitions::detectAndHandleOP2Definition (
     }
 
     OpDatDefinitions[opDatDeclaration->getVariableName ()] = opDatDeclaration;
+  }
+  else if (iequals (typeName, OP2::OP_SPARSITY))
+  {
+    Debug::getInstance ()->debugMessage ("OP_SPARSITY declaration call found",
+        Debug::FUNCTION_LEVEL, __FILE__, __LINE__);
+
+    SgAssignInitializer * assignmentInitializer = isSgAssignInitializer (
+        variableDeclaration->get_decl_item (variableName)->get_initializer ());
+
+    ROSE_ASSERT (assignmentInitializer != NULL);
+
+    SgFunctionCallExp * functionCallExpression = isSgFunctionCallExp (
+        assignmentInitializer->get_operand ());
+
+    ROSE_ASSERT (functionCallExpression != NULL);
+
+    OpSparsityDefinition * def;
+
+    if (functionCallExpression->get_args ()->get_expressions ().size ()
+        == CPPImperialOpSparsityDefinition::getNumberOfExpectedArguments ())
+    {
+      def = new CPPImperialOpSparsityDefinition (
+          functionCallExpression->get_args (), variableName);
+    }
+    else
+    {
+      ROSE_ASSERT (functionCallExpression->get_args ()->get_expressions ().size ()
+          == CPPOxfordOpSparsityDefinition::getNumberOfExpectedArguments ());
+
+      def = new CPPOxfordOpSparsityDefinition (
+          functionCallExpression->get_args (), variableName);
+    }
+
+    OpSparsityDefinitions[def->getVariableName ()] = def;
+  }
+  else if (iequals (typeName, OP2::OP_MAT))
+  {
+    Debug::getInstance ()->debugMessage ("OP_MAT declaration call found",
+        Debug::FUNCTION_LEVEL, __FILE__, __LINE__);
+
+    SgAssignInitializer * assignmentInitializer = isSgAssignInitializer (
+        variableDeclaration->get_decl_item (variableName)->get_initializer ());
+
+    ROSE_ASSERT (assignmentInitializer != NULL);
+
+    SgFunctionCallExp * functionCallExpression = isSgFunctionCallExp (
+        assignmentInitializer->get_operand ());
+
+    ROSE_ASSERT (functionCallExpression != NULL);
+
+    OpMatDefinition * def;
+
+    if (functionCallExpression->get_args ()->get_expressions ().size ()
+        == CPPImperialOpMatDefinition::getNumberOfExpectedArguments ())
+    {
+      def = new CPPImperialOpMatDefinition (
+          functionCallExpression->get_args (), variableName);
+    }
+    else
+    {
+      ROSE_ASSERT (functionCallExpression->get_args ()->get_expressions ().size ()
+          == CPPOxfordOpMatDefinition::getNumberOfExpectedArguments ());
+
+      def = new CPPOxfordOpMatDefinition (
+          functionCallExpression->get_args (), variableName);
+    }
+
+    OpMatDefinitions[def->getVariableName ()] = def;
   }
 }
 

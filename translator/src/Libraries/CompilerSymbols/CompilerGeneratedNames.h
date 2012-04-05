@@ -180,6 +180,24 @@ namespace OP2VariableNames
 
   /*
    * ======================================================
+   * Return the name of an OP_MAT variable in this argument 
+   * group.
+   * ======================================================
+   */
+  std::string const
+  getOpMatName (unsigned int n);
+
+  std::string const
+  getOpMatEntryName (unsigned int n);
+
+  std::string const
+  getOpMatMapName (unsigned int n);
+
+  std::string const
+  getOpMatMap2Name (unsigned int n);
+
+  /*
+   * ======================================================
    * Returns the name of an OP_DAT variable in this OP_DAT
    * argument group
    * ======================================================
